@@ -77,6 +77,7 @@ addons:
       - libperl-dev
       - libpq-dev
       - libpython3-all-dev
+      - libpython3.4
       - libreadline-dev
       - libsnmp-dev
       - libssl-dev
