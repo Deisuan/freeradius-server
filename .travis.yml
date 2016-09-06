@@ -48,6 +48,7 @@ addons:
       - mysql-server
       - pbuilder
       - python3-dev
+      - python3
       - quilt
       - libruby
       - ruby-dev
