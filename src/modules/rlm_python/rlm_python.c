@@ -936,6 +936,7 @@ static int python_interpreter_init(rlm_python_t *inst, CONF_SECTION *conf)
 
 				MEM(path = Py_DecodeLocale(inst->python_path, NULL));
 				PyList_Append(sys_path, PyUnicode_FromWideChar(path,-1));				
+				PyObject_SetAttrString(sys,"path",sys_path);
 				PyMem_RawFree(path);
 			}
 #elif PY_VERSION_HEX > 0x03000000
@@ -946,6 +947,7 @@ static int python_interpreter_init(rlm_python_t *inst, CONF_SECTION *conf)
 
 				MEM(path = _Py_char2wchar(inst->python_path, NULL));
 				PyList_Append(sys_path, PyUnicode_FromWideChar(path,-1));				
+				PyObject_SetAttrString(sys,"path",sys_path);
 				PyMem_RawFree(path);
 			}
 #else
