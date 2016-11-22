@@ -322,7 +322,7 @@ static void mod_vptuple(TALLOC_CTX *ctx, REQUEST *request, VALUE_PAIR **vps, PyO
 
 		vp->op = op;
 		if(PyBytes_CheckExact(pStr2)){
-			fr_pair_value_memcpy(vp, (uint8_t*)s2, PyBytes_Size(pStr2));
+			fr_pair_value_memcpy(vp, (uint8_t const*)s2, PyBytes_Size(pStr2));
 			DEBUG("%s - '%s:%s' %s '%s'", funcname, list_name, s1,
 			      fr_int2str(fr_tokens_table, op, "="), s2);
 		}else{
@@ -864,7 +864,7 @@ static int python_interpreter_init(rlm_python_t *inst, CONF_SECTION *conf)
 	if (python_instances == 0) {
 		INFO("Python version: %s", Py_GetVersion());
 
-		python_dlhandle = dlopen("libpython" STRINGIFY(PY_MAJOR_VERSION) "." STRINGIFY(PY_MINOR_VERSION) ".so",
+		python_dlhandle = dlopen("libpython" STRINGIFY(PY_MAJOR_VERSION) "." STRINGIFY(PY_MINOR_VERSION) "m.so",
 					 RTLD_NOW | RTLD_GLOBAL);
 		if (!python_dlhandle) WARN("Failed loading libpython symbols into global symbol table: %s", dlerror());
 
@@ -936,6 +936,7 @@ static int python_interpreter_init(rlm_python_t *inst, CONF_SECTION *conf)
 
 				MEM(path = Py_DecodeLocale(inst->python_path, NULL));
 				PyList_Append(sys_path, PyUnicode_FromWideChar(path,-1));				
+				PyObject_SetAttrString(sys,"path",sys_path);
 				PyMem_RawFree(path);
 			}
 #elif PY_VERSION_HEX > 0x03000000
@@ -946,6 +947,7 @@ static int python_interpreter_init(rlm_python_t *inst, CONF_SECTION *conf)
 
 				MEM(path = _Py_char2wchar(inst->python_path, NULL));
 				PyList_Append(sys_path, PyUnicode_FromWideChar(path,-1));				
+				PyObject_SetAttrString(sys,"path",sys_path);
 				PyMem_RawFree(path);
 			}
 #else
