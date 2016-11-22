@@ -322,7 +322,7 @@ static void mod_vptuple(TALLOC_CTX *ctx, REQUEST *request, VALUE_PAIR **vps, PyO
 
 		vp->op = op;
 		if(PyBytes_CheckExact(pStr2)){
-			fr_pair_value_memcpy(vp, (uint8_t*)s2, PyBytes_Size(pStr2));
+			fr_pair_value_memcpy(vp, (uint8_t const*)s2, PyBytes_Size(pStr2));
 			DEBUG("%s - '%s:%s' %s '%s'", funcname, list_name, s1,
 			      fr_int2str(fr_tokens_table, op, "="), s2);
 		}else{
