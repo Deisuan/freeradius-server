@@ -872,7 +872,7 @@ static PyMODINIT_FUNC PyInit_radiusd(void)
 	 */
 	if (PyModule_AddObject(inst->module, "config", inst->pythonconf_dict) < 0){
 		python_error_log();
-		PyEval_SaveThread();
+		//PyEval_SaveThread();
 		return Py_None;
 	}
 	cs = cf_section_sub_find(conf, "config");
@@ -886,6 +886,7 @@ static PyMODINIT_FUNC PyInit_radiusd(void)
  */
 static int python_interpreter_init(rlm_python_t *inst, CONF_SECTION *conf)
 {
+	Py_BEGIN_ALLOW_THREADS;
 	/*
 	 * prepare radiusd module to be loaded
 	 */
@@ -896,6 +897,11 @@ static int python_interpreter_init(rlm_python_t *inst, CONF_SECTION *conf)
 		current_inst = inst;
 		current_conf = conf;
 		PyImport_AppendInittab("radiusd",PyInit_radiusd);
+	} else {
+		inst->module = main_module;
+		Py_IncRef(inst->module);
+		inst->pythonconf_dict = PyObject_GetAttrString(inst->module, "config");
+		Py_IncRef(inst->pythonconf_dict);
 	}
 	/*
 	 *	Explicitly load libpython, so symbols will be available to lib-dynload modules
@@ -948,10 +954,10 @@ static int python_interpreter_init(rlm_python_t *inst, CONF_SECTION *conf)
 	 *	This sets up a separate environment for each python module instance
 	 *	These will be destroyed on Py_Finalize().
 	 */
-	if (!inst->cext_compat) {
-		inst->sub_interpreter = Py_NewInterpreter();
-	} else {
+	if (inst->cext_compat) {
 		inst->sub_interpreter = main_interpreter;
+	} else {
+		inst->sub_interpreter = Py_NewInterpreter();
 	}
 
 	PyThreadState_Swap(inst->sub_interpreter);
@@ -998,16 +1004,11 @@ static int python_interpreter_init(rlm_python_t *inst, CONF_SECTION *conf)
 			}
 #endif
 		}
-
-	} else {
-		inst->module = main_module;
-		Py_IncRef(inst->module);
-		inst->pythonconf_dict = PyObject_GetAttrString(inst->module, "config");
-		Py_IncRef(inst->pythonconf_dict);
 	}
 
-	PyEval_SaveThread();
 
+	//PyEval_SaveThread();
+	Py_END_ALLOW_THREADS
 	return 0;
 }
 
