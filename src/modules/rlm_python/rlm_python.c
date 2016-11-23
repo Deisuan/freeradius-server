@@ -35,6 +35,7 @@ RCSID("$Id$")
 
 #include <Python.h>
 #include <dlfcn.h>
+#include "rlm_python.h"
 
 static uint32_t		python_instances = 0;
 static void		*python_dlhandle;
@@ -44,59 +45,6 @@ static PyObject		*main_module;		//!< Pthon configuration dictionary.
 
 static rlm_python_t *current_inst;		//!< Needed to pass parameter to PyInit_radiusd
 static CONF_SECTION *current_conf;		//!< Needed to pass parameter to PyInit_radiusd
-
-/** Specifies the module.function to load for processing a section
- *
- */
-typedef struct python_func_def {
-	PyObject	*module;		//!< Python reference to module.
-	PyObject	*function;		//!< Python reference to function in module.
-
-	char const	*module_name;		//!< String name of module.
-	char const	*function_name;		//!< String name of function in module.
-} python_func_def_t;
-
-/** An instance of the rlm_python module
- *
- */
-typedef struct rlm_python_t {
-	char const	*name;			//!< Name of the module instance
-	PyThreadState	*sub_interpreter;	//!< The main interpreter/thread used for this instance.
-	char const	*python_path;		//!< Path to search for python files in.
-	PyObject	*module;		//!< Local, interpreter specific module, containing
-						//!< FreeRADIUS functions.
-	bool		cext_compat;		//!< Whether or not to create sub-interpreters per module
-						//!< instance.
-
-	python_func_def_t
-	instantiate,
-	authorize,
-	authenticate,
-	preacct,
-	accounting,
-	checksimul,
-	pre_proxy,
-	post_proxy,
-	post_auth,
-#ifdef WITH_COA
-	recv_coa,
-	send_coa,
-#endif
-	detach;
-
-	PyObject	*pythonconf_dict;	//!< Configuration parameters defined in the module
-						//!< made available to the python script.
-} rlm_python_t;
-
-/** Tracks a python module inst/thread state pair
- *
- * Multiple instances of python create multiple interpreters and each
- * thread must have a PyThreadState per interpreter, to track execution.
- */
-typedef struct python_thread_state {
-	PyThreadState		*state;		//!< Module instance/thread specific state.
-	rlm_python_t const	*inst;		//!< Module instance that created this thread state.
-} python_thread_state_t;
 
 /*
  *	A mapping of configuration file names to internal variables.
@@ -881,6 +829,7 @@ PyMODINIT_FUNC PyInit_radiusd(void)
 	 */
 	rlm_python_t *inst = current_inst;
 	CONF_SECTION *conf = current_conf;
+	int i;
 
 	inst->module = PyModule_Create(&moduledef);
 	if (!inst->module) {
@@ -921,8 +870,11 @@ PyMODINIT_FUNC PyInit_radiusd(void)
 	/*
 	 *	Add module configuration as a dict
 	 */
-	if (PyModule_AddObject(inst->module, "config", inst->pythonconf_dict) < 0) goto error;
-
+	if (PyModule_AddObject(inst->module, "config", inst->pythonconf_dict) < 0){
+		python_error_log();
+		PyEval_SaveThread();
+		return Py_None;
+	}
 	cs = cf_section_sub_find(conf, "config");
 	if (cs) python_parse_config(cs, 0, inst->pythonconf_dict);
 	
