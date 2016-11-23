@@ -821,7 +821,7 @@ static void python_parse_config(CONF_SECTION *cs, int lvl, PyObject *dict)
 /*
  * creates a module "radiusd"
  */
-PyMODINIT_FUNC PyInit_radiusd(void)
+static PyMODINIT_FUNC PyInit_radiusd(void)
 {
 	CONF_SECTION *cs;
 	/*
@@ -886,8 +886,6 @@ PyMODINIT_FUNC PyInit_radiusd(void)
  */
 static int python_interpreter_init(rlm_python_t *inst, CONF_SECTION *conf)
 {
-	int i;
-
 	/*
 	 * prepare radiusd module to be loaded
 	 */
