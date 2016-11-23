@@ -1013,7 +1013,7 @@ static int python_interpreter_init(rlm_python_t *inst, CONF_SECTION *conf)
 
 
 	//PyEval_SaveThread();
-	//Py_END_ALLOW_THREADS
+	Py_END_ALLOW_THREADS;
 	return 0;
 }
 
