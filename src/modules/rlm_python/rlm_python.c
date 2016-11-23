@@ -835,8 +835,10 @@ static PyMODINIT_FUNC PyInit_radiusd(void)
 	if (!inst->module) {
 		python_error_log();
 		PyEval_SaveThread();
+		Py_INCREF(Py_None);
 		return Py_None;
 	}
+	Py_INCREF(inst->module);
 
 	/*
 	 *	Py_InitModule3 returns a borrowed ref, the actual
@@ -852,6 +854,7 @@ static PyMODINIT_FUNC PyInit_radiusd(void)
 					     radiusd_constants[i].value)) < 0){
 			python_error_log();
 			PyEval_SaveThread();
+			Py_INCREF(Py_None);
 			return Py_None;
 		}
 	}
@@ -864,6 +867,7 @@ static PyMODINIT_FUNC PyInit_radiusd(void)
 	if (!inst->pythonconf_dict) {
 		ERROR("Unable to create python dict for config");
 		python_error_log();
+		Py_INCREF(Py_None);
 		return Py_None;
 	}
 
@@ -873,6 +877,7 @@ static PyMODINIT_FUNC PyInit_radiusd(void)
 	if (PyModule_AddObject(inst->module, "config", inst->pythonconf_dict) < 0){
 		python_error_log();
 		//PyEval_SaveThread();
+		Py_INCREF(Py_None);
 		return Py_None;
 	}
 	cs = cf_section_sub_find(conf, "config");
@@ -1008,7 +1013,7 @@ static int python_interpreter_init(rlm_python_t *inst, CONF_SECTION *conf)
 
 
 	//PyEval_SaveThread();
-	Py_END_ALLOW_THREADS
+	//Py_END_ALLOW_THREADS
 	return 0;
 }
 
