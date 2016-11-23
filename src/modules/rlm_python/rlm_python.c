@@ -42,6 +42,9 @@ static void		*python_dlhandle;
 static PyThreadState	*main_interpreter;	//!< Main interpreter (cext safe)
 static PyObject		*main_module;		//!< Pthon configuration dictionary.
 
+static rlm_python_t *current_inst;		//!< Needed to pass parameter to PyInit_radiusd
+static CONF_SECTION *current_conf;		//!< Needed to pass parameter to PyInit_radiusd
+
 /** Specifies the module.function to load for processing a section
  *
  */
@@ -195,6 +198,22 @@ static PyMethodDef module_methods[] = {
 	  "constants L_DBG, L_AUTH, L_INFO, L_ERR, L_PROXY\n"
 	},
 	{ NULL, NULL, 0, NULL },
+};
+
+/*
+ *	Initialise a new module, with our default methods
+ */
+static struct PyModuleDef moduledef = {
+	PyModuleDef_HEAD_INIT,
+	"radiusd",			/*m_doc*/
+	"FreeRADIUS python module",	/*m_doc*/
+	-1,				/*m_size*/
+	module_methods,			/*m_methods*/
+	NULL,				/*m_reload*/
+	NULL,				/*m_traverse*/
+	NULL,				/*m_clear*/
+	NULL,				/*m_free*/
+	
 };
 
 /** Print out the current error
@@ -851,6 +870,65 @@ static void python_parse_config(CONF_SECTION *cs, int lvl, PyObject *dict)
 	DEBUG("%*s}", indent_section, " ");
 }
 
+/*
+ * creates a module "radiusd"
+ */
+PyMODINIT_FUNC PyInit_radiusd(void)
+{
+	CONF_SECTION *cs;
+	/*
+	 * This is ugly, but there is no other way to pass parameters to PyMODINIT_FUNC
+	 */
+	rlm_python_t *inst = current_inst;
+	CONF_SECTION *conf = current_conf;
+
+	inst->module = PyModule_Create(&moduledef);
+	if (!inst->module) {
+		python_error_log();
+		PyEval_SaveThread();
+		return Py_None;
+	}
+
+	/*
+	 *	Py_InitModule3 returns a borrowed ref, the actual
+	 *	module is owned by sys.modules, so we also need
+	 *	to own the module to prevent it being freed early.
+	 */
+	//Py_IncRef(inst->module);
+
+	if (inst->cext_compat) main_module = inst->module;
+
+	for (i = 0; radiusd_constants[i].name; i++) {
+		if ((PyModule_AddIntConstant(inst->module, radiusd_constants[i].name,
+					     radiusd_constants[i].value)) < 0){
+			python_error_log();
+			PyEval_SaveThread();
+			return Py_None;
+		}
+	}
+
+	/*
+	 *	Convert a FreeRADIUS config structure into a python
+	 *	dictionary.
+	 */
+	inst->pythonconf_dict = PyDict_New();
+	if (!inst->pythonconf_dict) {
+		ERROR("Unable to create python dict for config");
+		python_error_log();
+		return Py_None;
+	}
+
+	/*
+	 *	Add module configuration as a dict
+	 */
+	if (PyModule_AddObject(inst->module, "config", inst->pythonconf_dict) < 0) goto error;
+
+	cs = cf_section_sub_find(conf, "config");
+	if (cs) python_parse_config(cs, 0, inst->pythonconf_dict);
+	
+	return inst->module;
+}
+
 /** Initialises a separate python interpreter for this module instance
  *
  */
@@ -858,6 +936,17 @@ static int python_interpreter_init(rlm_python_t *inst, CONF_SECTION *conf)
 {
 	int i;
 
+	/*
+	 * prepare radiusd module to be loaded
+	 */
+	if (!inst->cext_compat || !main_module) {
+		/*
+		 * This is ugly, but there is no other way to pass parameters to PyMODINIT_FUNC
+		 */
+		current_inst = inst;
+		current_conf = conf;
+		PyImport_AppendInittab("radiusd",PyInit_radiusd);
+	}
 	/*
 	 *	Explicitly load libpython, so symbols will be available to lib-dynload modules
 	 */
@@ -922,7 +1011,6 @@ static int python_interpreter_init(rlm_python_t *inst, CONF_SECTION *conf)
 	 *	with Python C extensions if they use GIL lock functions.
 	 */
 	if (!inst->cext_compat || !main_module) {
-		CONF_SECTION *cs;
 
 		/*
 		 *	Set the python search path
@@ -961,62 +1049,6 @@ static int python_interpreter_init(rlm_python_t *inst, CONF_SECTION *conf)
 #endif
 		}
 
-		/*
-		 *	Initialise a new module, with our default methods
-		 */
-		static struct PyModuleDef moduledef = {
-			PyModuleDef_HEAD_INIT,
-			"radiusd",			/*m_doc*/
-			"FreeRADIUS python module",	/*m_doc*/
-			-1,				/*m_size*/
-			module_methods,			/*m_methods*/
-			NULL,				/*m_reload*/
-			NULL,				/*m_traverse*/
-			NULL,				/*m_clear*/
-			NULL,				/*m_free*/
-			
-		};
-		inst->module = PyModule_Create(&moduledef);
-		if (!inst->module) {
-		error:
-			python_error_log();
-			PyEval_SaveThread();
-			return -1;
-		}
-
-		/*
-		 *	Py_InitModule3 returns a borrowed ref, the actual
-		 *	module is owned by sys.modules, so we also need
-		 *	to own the module to prevent it being freed early.
-		 */
-		Py_IncRef(inst->module);
-
-		if (inst->cext_compat) main_module = inst->module;
-
-		for (i = 0; radiusd_constants[i].name; i++) {
-			if ((PyModule_AddIntConstant(inst->module, radiusd_constants[i].name,
-						     radiusd_constants[i].value)) < 0)
-				goto error;
-		}
-
-		/*
-		 *	Convert a FreeRADIUS config structure into a python
-		 *	dictionary.
-		 */
-		inst->pythonconf_dict = PyDict_New();
-		if (!inst->pythonconf_dict) {
-			ERROR("Unable to create python dict for config");
-			python_error_log();
-			return -1;
-		}
-
-		/*
-		 *	Add module configuration as a dict
-		 */
-		if (PyModule_AddObject(inst->module, "config", inst->pythonconf_dict) < 0) goto error;
-
-		cs = cf_section_sub_find(conf, "config");
-		if (cs) python_parse_config(cs, 0, inst->pythonconf_dict);
 	} else {
 		inst->module = main_module;
 		Py_IncRef(inst->module);
